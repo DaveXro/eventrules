@@ -3,8 +3,6 @@ package eventrules
 import (
 	"fmt"
 	"testing"
-
-	"github.com/DaveXro/eventrules/processor"
 )
 
 func TestRulesEngine(t *testing.T) {
@@ -12,7 +10,7 @@ func TestRulesEngine(t *testing.T) {
 
 	ConfigureRulesEngine("RulesEngineTest", dns)
 
-	ruleProcessor, err := processor.CreateProcessorFromFile("./sample.rule", false)
+	ruleProcessor, err := CreateProcessorFromFile("./sample.rule", false)
 
 	if err != nil {
 		t.Fail()
