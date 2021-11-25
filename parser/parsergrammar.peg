@@ -6,8 +6,8 @@ package parser
 
 import (
 	"strings"
-	"github.com/invoice-fair/ifrules/ast"
-	"github.com/invoice-fair/ifrules/ast/commands/eventDecoder"
+	"github.com/DaveXro/eventrules/ast"
+	"github.com/DaveXro/eventrules/ast/commands/eventDecoder"
 )
 
 func splitComponents(comp interface{}) []interface{} {

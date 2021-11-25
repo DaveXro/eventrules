@@ -3,9 +3,9 @@ package processor
 import (
 	"os"
 
-	"github.com/invoice-fair/ifrules/ast"
-	"github.com/invoice-fair/ifrules/ast/commands"
-	"github.com/invoice-fair/ifrules/parser"
+	"github.com/DaveXro/eventrules/ast"
+	"github.com/DaveXro/eventrules/ast/commands"
+	"github.com/DaveXro/eventrules/parser"
 
 	"github.com/rs/zerolog/log"
 )

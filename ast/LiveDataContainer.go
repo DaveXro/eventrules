@@ -3,7 +3,7 @@ package ast
 import (
 	"strings"
 
-	"github.com/invoice-fair/ifrules/ast/commands"
+	"github.com/DaveXro/eventrules/ast/commands"
 )
 
 type LiveDataContainer struct {

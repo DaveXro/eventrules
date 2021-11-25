@@ -17,7 +17,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/invoice-fair/ifrules/ast"
+	"github.com/DaveXro/eventrules/ast"
 )
 
 func splitComponents(comp interface{}) []interface{} {

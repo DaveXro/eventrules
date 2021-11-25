@@ -1,6 +1,6 @@
-package ifrules
+package eventrules
 
-import "github.com/invoice-fair/ifrules/ast"
+import "github.com/DaveXro/eventrules/ast"
 
 func ConfigureRulesEngine(engineId string, dnsSettings map[string]string) {
 	ast.EngineId = engineId

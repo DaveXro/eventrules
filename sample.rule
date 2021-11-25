@@ -1,0 +1,48 @@
+// Comment 1
+
+ON Lead:Create
+
+// Comment 2
+
+when (
+    experianData is not empty
+    experianData.CompanyName is not empty
+    experianData.AnnualRevenue > 5000000.00 OR experianData.StaffCount > 500
+    experianData.StaffCount > 20
+){
+
+    // Comment 3
+    testInt = 140 + 23 
+
+    otherAssignment = "Hello World"
+}
+
+// Comment 3
+
+otherwise
+when (
+    // Comment 4
+    experianData is not empty
+    experianData.CompanyName is not empty
+    experianData.AnnualRevenue > 1000000.00
+    experianData.AnnualRevenue < 100000000.00 
+)
+{
+    // Comment 5
+    // Another line
+    // Another line
+    // Another line
+    // Another line
+    
+    testInt = 100 + (90 / (10 * 30))
+
+    posts = GET "https://jsonplaceholder.typicode.com/todos"
+    firstPost = GET "https://jsonplaceholder.typicode.com/todos/1"
+
+    RAISE EVENT Lead:Create {
+        "SampleField" : "SampleValue",
+        "Field2" : 2343423,
+        "Field3" : true
+    }
+    
+}
