@@ -1,0 +1,351 @@
+// Use the pigeon tool to compile this PEG grammer into the grammer file
+// ~/go/bin/pigeon -o ./grammar.go parsergrammar.peg
+// 
+{
+package parser
+
+import (
+	"strings"
+	"github.com/invoice-fair/ifrules/ast"
+	"github.com/invoice-fair/ifrules/ast/commands/eventDecoder"
+)
+
+func splitComponents(comp interface{}) []interface{} {
+	if comp == nil {
+		return nil
+	}
+
+	return comp.([]interface{})
+}
+
+}
+	
+	Input <- root:Trigger _ condition:Condition _ (Comment _)* conditions:("otherwise" _ Condition)* EOF {
+		container := &ast.RuleContainer{}
+		container.Trigger = root.(ast.IAstNode)
+
+		choiceBlock := &ast.ChoiceNode{}
+		choiceBlock.AddChoice (condition.(ast.IAstNode))
+
+		for _, otherRules := range splitComponents(conditions){
+			altRule := splitComponents(otherRules)
+			decodedRule := altRule[2].(ast.IAstNode)	
+			choiceBlock.AddChoice(decodedRule)
+		}
+
+		container.Plan = choiceBlock
+
+		return container, nil
+	}
+	
+	// --------------------------------------------------
+	// Triggers
+	// --------------------------------------------------
+
+	Trigger <- _ (Comment _)* "ON" _ eventName:TriggerName _ {
+		triggerNode := &ast.TriggerNode{EventName: eventName.(string)}
+		return ast.IAstNode(triggerNode), nil
+	}
+
+	TriggerName <- VariableName ':' VariableName {
+		return string(c.text), nil
+	}
+
+	// --------------------------------------------------
+	// Conditions
+	// --------------------------------------------------
+
+	Condition <- _ (Comment _)* "when" _ "("_ ruleField:( RuleField _ / Comment _)+ _  ")" _ block:StatementBlock { 
+
+		astBlock := &ast.ConditionBlock{}
+
+		if astBlock == nil {
+			panic("Cant create AST")
+		}
+
+		for _, ruleElements := range splitComponents(ruleField) {
+			rule := splitComponents(ruleElements)
+
+			if node, isAstNode := rule[0].(ast.IAstNode); isAstNode {
+				currentRule := node
+				astBlock.AddCondition(currentRule)
+			}
+		}
+		astBlock.Action = block.(ast.IAstNode)
+
+		return ast.IAstNode(astBlock), nil
+	}
+	
+	RuleField <- first:RuleClause _ alt: ("OR" _ RuleClause _)? _ {
+		firstRule := first.(ast.IAstNode)
+
+		otherRules := splitComponents(alt)
+
+		if otherRules != nil {
+			altRule := otherRules[2].(ast.IAstNode)
+
+			altNode := &ast.AltClauseNode {
+				Lhs : firstRule,
+				Rhs : altRule,
+				Op : "OR",
+
+			}
+			return altNode, nil
+		}
+
+		return firstRule, nil
+	}
+
+	RuleClause <- field:VariableName _ null:EmptyCheck _ {
+		ruleField := field.(string)
+
+		lhs := &ast.VariableNode {}
+		lhs.Name = ruleField
+
+		rhs := &ast.VariableNode {}
+		rhs.Name = "empty"
+
+		astCondition := &ast.ConditionNode{}
+
+		if null == 1{
+			astCondition.Op = "=="
+		} else {
+			astCondition.Op = "!="
+		}
+
+		astCondition.Lhs = lhs
+		astCondition.Rhs = rhs
+
+		return astCondition, nil
+
+	} / field:VariableName _ op:ComparisonOperator _ rhs:ConditionValue _ {
+		ruleField := field.(string)
+
+		lhs := &ast.VariableNode {}
+		lhs.Name = ruleField
+
+		decodedVal := rhs.(ast.IAstNode)
+
+		astCondition := &ast.ConditionNode{lhs, decodedVal, op.(string)}
+
+		return astCondition, nil
+
+	} 
+
+	ConditionValue <- rhsVal:(Decimal / Integer) {
+		val := &ast.ValueNode{rhsVal}
+		return val, nil
+	}
+
+	EmptyCheck <- "is empty" {
+		return 1, nil
+	} / "is not empty" {
+		return 0, nil
+	}
+
+	// --------------------------------------------------
+	// Statements
+	// --------------------------------------------------
+
+	StatementBlock <- _ "{"_ (Comment _)* stmt:(Statement)* _ "}" _ {
+		block := &ast.BlockNode{}
+
+		for _, curStatement := range splitComponents(stmt) {
+			block.AddStatement(curStatement.(ast.IAstNode))
+
+		}
+		return ast.IAstNode(block), nil
+	}
+
+	Statement <- (Comment _)* stmt:Assignment _  (Comment _)* {
+		return stmt.(ast.IAstNode), nil
+	} / (Comment _)* stmt:RaiseEvent _ (Comment _)* {
+		return stmt.(ast.IAstNode), nil
+	}
+
+	// ToDo: Will need to update this to support floats
+	Assignment <- _ lhs:VariableName _ '=' _  val:ConstString _ {
+		assignmentName := lhs.(string)
+		assignmentRhs := &ast.ValueNode{val.(string)}
+
+		assignmentNode := &ast.AssignmentNode{assignmentName, assignmentRhs}
+		return ast.IAstNode(assignmentNode), nil
+	} / _ lhs:VariableName _ '=' _ val:Expr _ {
+		assignmentNode := &ast.AssignmentNode{}
+		assignmentNode.Name = lhs.(string)
+		assignmentNode.Rhs = val.(ast.IAstNode)
+		return ast.IAstNode(assignmentNode), nil
+	} / _ lhs:VariableName _ '=' _ restCommand:RestGet _ {
+		assignmentNode := &ast.AssignmentNode{}
+		assignmentNode.Name = lhs.(string)
+		assignmentNode.Rhs = restCommand.(ast.IAstNode)
+		return ast.IAstNode(assignmentNode), nil
+	}
+
+	// --------------------------------------------------
+	// Expressions
+	// --------------------------------------------------
+
+	RestGet <- "GET" _ url:ConstString _ {
+		addressParam := &ast.ValueNode{url.(string)}
+
+		node := &ast.CommandNode {Command: "GET"}
+		node.AddParameter (addressParam)
+
+		return node, nil
+	}
+
+	RaiseEvent <- "RAISE EVENT" _ name:TriggerName _ eventBody:JsonObject _{
+		node := &ast.RaiseEventNode {EventName: name.(string), MessageBody: eventBody.(ast.IAstNode)}
+		return node, nil
+	}
+
+	JsonObject <- '{' _ vals:(ConstString _ ':' _ JsonValue (',' _ ConstString _ ':' _ JsonValue)* )?  _ '}' _ {
+		node := ast.CreateJsonBodyNode()
+
+		entries := splitComponents(vals)
+
+		node.Entries[entries[0].(string)] = entries[4]
+
+		moreEntries := splitComponents(entries[5])
+
+		for _, e := range moreEntries {
+			nextVal := splitComponents(e)
+			node.Entries[nextVal[2].(string)] = nextVal[6]
+		}
+
+		return ast.IAstNode(node), nil
+	}
+
+	JsonValue <- val:(JsonObject / ConstString / Decimal / Integer / Bool) {
+		var retVal ast.IAstNode
+
+		switch val.(type){
+			case ast.IAstNode:
+				retVal = val.(ast.IAstNode)
+			case int:
+				retVal = &ast.ValueNode{val}
+			case string:
+				retVal = &ast.ValueNode{val}
+			case float32:
+				retVal = &ast.ValueNode{val}
+			case float64:
+				retVal = &ast.ValueNode{val}
+			case bool:
+				retVal = &ast.ValueNode{val}
+		}
+		return retVal, nil
+	}
+
+
+	NOP "Null OP" <- _ "nop" _
+
+	// --------------------------------------------------
+	// Expressions
+	// --------------------------------------------------
+
+	Expr <- _ first:Term rest:( _ AddOp _ Term )* _ {
+		lhs := first.(ast.IAstNode)
+
+		rawRhs := splitComponents(rest)
+
+		for _, v := range rawRhs{
+			restExpr := splitComponents(v)
+
+			op := restExpr[1].(string)
+
+			rhs := restExpr[3].(ast.IAstNode)
+
+			exprNode := &ast.ExpressionNode{lhs,rhs, op}
+			
+			lhs =ast.IAstNode(exprNode)
+		}
+
+		return ast.IAstNode(lhs), nil
+	}
+	
+	Term <- first:Factor rest:( _ MulOp _ Factor )* {
+		lhs := first.(ast.IAstNode)
+
+		rawRhs := splitComponents(rest)
+
+		for _, v := range rawRhs {
+			restExpr := splitComponents(v)
+
+			op := restExpr[1].(string)
+
+			rhs := restExpr[3].(ast.IAstNode)
+
+			exprNode := &ast.ExpressionNode{lhs,rhs, op}
+			
+			lhs =ast.IAstNode(exprNode)
+		}
+		
+		return ast.IAstNode(lhs), nil
+	}
+	
+	Factor <- '(' expr:Expr ')' {
+		return expr, nil
+	} / integer:Integer {
+		intNode := &ast.ValueNode {integer}
+		return ast.IAstNode(intNode), nil
+	}
+	
+	AddOp <- ( '+' / '-' ) {
+		return string(c.text), nil
+	}
+		
+	MulOp <- ( '*' / '/' ) {
+		return string(c.text), nil
+	}
+	
+	ComparisonOperator <- ("==" / "<=" / ">=" / "!=" / "<" / ">") {
+		return string(c.text), nil
+	}
+
+	// --------------------------------------------------
+	// Base Elements
+	// --------------------------------------------------
+
+	VariableName <- FieldChars+ {
+		return string(c.text), nil
+	}
+
+	FieldChars <- [a-zA-Z0-9_\\.] {
+		return string(c.text),nil
+	}
+
+	ConstString <- '"' ( !EscapedChar . / '\\' EscapeSequence )* '"' {
+		c.text = bytes.Replace(c.text, []byte(`\/`), []byte(`/`), -1)
+		return strconv.Unquote(string(c.text))
+	}
+
+	EscapedChar <- [\x00-\x1f"\\]
+
+	EscapeSequence <- SingleCharEscape / UnicodeEscape
+
+	SingleCharEscape <- ["\\/bfnrt]
+
+	UnicodeEscape <- 'u' HexDigit HexDigit HexDigit HexDigit
+
+	HexDigit <- [0-9a-f]i
+
+	Decimal <- '-'? [0-9]+.[0-9]+ {
+		if val, err := strconv.ParseFloat(string(c.text), 32); err == nil {
+			return float32(val), err
+		}
+
+		return 0.0, nil
+	}
+
+	Integer <- '-'? [0-9]+ {
+		return strconv.Atoi(string(c.text))
+	}
+
+	Bool <- "true" { return true, nil } / "false" { return false, nil }
+
+	Comment <- "//" [^\r\n]*
+
+	_ "whitespace" <- [ \n\t\r]*
+
+	EOF <- !.
