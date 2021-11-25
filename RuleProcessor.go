@@ -15,6 +15,11 @@ type RulesProcessorEngine struct {
 	DataContainer ast.LiveDataContainer
 }
 
+func ConfigureRulesEngine(engineId string, dnsSettings map[string]string) {
+	ast.EngineId = engineId
+	ast.ConfigureDnsSettings(dnsSettings)
+}
+
 func CreateProcessorFromFile(ruleFile string, debugParse bool) (*RulesProcessorEngine, error) {
 	rawRule, err := os.ReadFile(ruleFile)
 
